@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CricketMark10">
+  <meta name="theme-color" content="#0f0f14">
+  <link rel="manifest" href="manifest.json">
+  <title>Cricket Mark 10</title>
+  <style>
+    /* ─── Design Tokens ─── */
+    :root {
+      --bg:        #0f0f14;
+      --surface:   #1a1a24;
+      --surface2:  #22222f;
+      --border:    #2e2e3e;
+      --accent:    #e8ff47;   /* dart-yellow: the signature color */
+      --accent2:   #ff6b35;   /* bull red */
+      --text:      #f0f0f5;
+      --text-sub:  #8888aa;
+      --mark-on:   #e8ff47;
+      --mark-off:  #2e2e3e;
+      --radius:    12px;
+      --radius-sm: 8px;
+      --font-mono: 'SF Mono', 'Menlo', monospace;
+      --font-main: -apple-system, 'Hiragino Sans', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-main);
+      min-height: 100dvh;
+      max-width: 430px;
+      margin: 0 auto;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* ─── Nav ─── */
+    nav {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    nav button {
+      flex: 1;
+      padding: 14px 0;
+      background: none;
+      border: none;
+      color: var(--text-sub);
+      font-size: 12px;
+      font-family: var(--font-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    nav button .nav-icon { font-size: 20px; }
+    nav button.active { color: var(--accent); }
+    nav button.active .nav-icon { filter: drop-shadow(0 0 6px var(--accent)); }
+
+    /* ─── Pages ─── */
+    .page { display: none; padding: 20px 16px 100px; }
+    .page.active { display: block; }
+
+    /* ─── Practice Page ─── */
+    .target-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .target-label {
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      margin-bottom: 6px;
+    }
+    .target-number {
+      font-size: 80px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 40px rgba(232,255,71,0.3);
+      font-family: var(--font-mono);
+    }
+    .target-number.bull { color: var(--accent2); text-shadow: 0 0 40px rgba(255,107,53,0.4); }
+
+    .marks-display {
+      margin: 20px 0;
+    }
+    .marks-pips {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .pip {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--mark-off);
+      border: 2px solid var(--border);
+      transition: all 0.15s;
+    }
+    .pip.filled {
+      background: var(--mark-on);
+      border-color: var(--mark-on);
+      box-shadow: 0 0 8px rgba(232,255,71,0.5);
+    }
+    .pip.filled.bull-pip {
+      background: var(--accent2);
+      border-color: var(--accent2);
+      box-shadow: 0 0 8px rgba(255,107,53,0.5);
+    }
+    .marks-count {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .marks-count span { color: var(--text-sub); font-size: 20px; }
+
+    .throw-counter {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-bottom: 28px;
+    }
+    .throw-counter strong { color: var(--text); }
+
+    /* ─── Throw Buttons ─── */
+    .throw-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .btn {
+      padding: 18px 12px;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: var(--font-main);
+      cursor: pointer;
+      transition: all 0.12s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-out {
+      background: var(--surface2);
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+    }
+    .btn-1m { background: #1e3a1e; color: #6dff6d; border: 1px solid #2a5a2a; }
+    .btn-2m { background: #1e2e50; color: #6db3ff; border: 1px solid #2a4080; }
+    .btn-3m { background: #3a1e3a; color: #ff6dff; border: 1px solid #5a2a5a; }
+
+    .btn-mark-label {
+      font-size: 10px;
+      font-weight: 400;
+      opacity: 0.7;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .btn-undo {
+      width: 100%;
+      padding: 14px;
+      background: var(--surface);
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: var(--font-main);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .btn-undo:active { background: var(--surface2); }
+    .btn-undo:disabled { opacity: 0.3; }
+
+    /* ─── Progress Strip ─── */
+    .session-progress {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+    }
+    .prog-seg {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: background 0.2s;
+    }
+    .prog-seg.done { background: var(--accent); }
+    .prog-seg.current { background: rgba(232,255,71,0.4); }
+    .prog-seg.bull-done { background: var(--accent2); }
+
+    /* ─── Complete Banner ─── */
+    .complete-banner {
+      display: none;
+      text-align: center;
+      padding: 32px 20px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-top: 20px;
+    }
+    .complete-banner.show { display: block; }
+    .complete-banner h2 { font-size: 24px; color: var(--accent); margin-bottom: 8px; }
+    .complete-banner p { color: var(--text-sub); font-size: 14px; margin-bottom: 20px; }
+    .btn-save {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 16px 40px;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-new {
+      display: block;
+      margin: 12px auto 0;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 12px 32px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* ─── History Page ─── */
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .page-sub { font-size: 13px; color: var(--text-sub); margin-bottom: 20px; }
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .stat-card .val {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--accent);
+    }
+    .stat-card .lbl { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+
+    /* ─── Chart ─── */
+    .chart-section {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .chart-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .chart-toggle button {
+      flex: 1;
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text-sub);
+      font-size: 12px;
+      cursor: pointer;
+      font-family: var(--font-main);
+    }
+    .chart-toggle button.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    canvas#mainChart { width: 100% !important; }
+
+    /* ─── Sessions List ─── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .session-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+    .session-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 16px;
+      cursor: pointer;
+    }
+    .session-card-header:active { background: var(--surface2); }
+    .session-no { font-size: 12px; color: var(--text-sub); }
+    .session-date { font-size: 14px; font-weight: 600; }
+    .session-throws {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .session-detail {
+      display: none;
+      padding: 0 16px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .session-detail.open { display: block; }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding-top: 14px;
+    }
+    .detail-cell { text-align: center; }
+    .detail-cell .d-num {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-bottom: 3px;
+    }
+    .detail-cell .d-throws {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .detail-cell .d-rate {
+      font-size: 10px;
+      color: var(--text-sub);
+    }
+
+    /* ─── Stats Page ─── */
+    .number-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .num-row {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 48px 1fr 60px 70px;
+      align-items: center;
+      gap: 8px;
+    }
+    .num-row .nr-num {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .num-row .nr-num.bull-num { color: var(--accent2); }
+    .bar-wrap {
+      background: var(--border);
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width 0.4s ease;
+    }
+    .bar-fill.bull-bar { background: var(--accent2); }
+    .nr-throws {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text);
+    }
+    .nr-rate {
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-sub);
+    }
+    .empty-state .em-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ─── Toast ─── */
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--accent);
+      color: #000;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.2s;
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Navigation ─── -->
+<nav>
+  <button class="active" onclick="switchPage('practice')">
+    <span class="nav-icon">🎯</span>練習
+  </button>
+  <button onclick="switchPage('history')">
+    <span class="nav-icon">📋</span>履歴
+  </button>
+  <button onclick="switchPage('stats')">
+    <span class="nav-icon">📊</span>統計
+  </button>
+</nav>
+
+<!-- ─── Practice Page ─── -->
+<div id="page-practice" class="page active">
+
+  <!-- Session progress strip (7 segments: 20,19,18,17,16,15,BULL) -->
+  <div class="session-progress" id="progressStrip"></div>
+
+  <div class="target-header">
+    <div class="target-label">現在のターゲット</div>
+    <div class="target-number" id="targetDisplay">20</div>
+  </div>
+
+  <div class="marks-display">
+    <div class="marks-pips" id="markPips"></div>
+    <div class="marks-count" id="marksCount">0 <span>/ 10</span></div>
+  </div>
+
+  <div class="throw-counter">
+    このナンバー: <strong id="throwsThisNum">0</strong> スロー ／
+    合計: <strong id="throwsTotal">0</strong> スロー
+  </div>
+
+  <div class="throw-buttons">
+    <button class="btn btn-out"  onclick="recordThrow(0)">OUT<span class="btn-mark-label">0マーク</span></button>
+    <button class="btn btn-1m"   onclick="recordThrow(1)">1MARK<span class="btn-mark-label">シングル</span></button>
+    <button class="btn btn-2m"   onclick="recordThrow(2)">2MARK<span class="btn-mark-label">ダブル / インブル</span></button>
+    <button class="btn btn-3m"   onclick="recordThrow(3)">3MARK<span class="btn-mark-label">トリプル</span></button>
+  </div>
+  <button class="btn-undo" id="undoBtn" onclick="undoThrow()">↩ 取り消し（残り<span id="undoRemain">3</span>回）</button>
+
+  <!-- Complete banner -->
+  <div class="complete-banner" id="completeBanner">
+    <h2>🎯 練習完了！</h2>
+    <p id="completeMsg"></p>
+    <button class="btn-save" onclick="saveSession()">記録を保存</button>
+    <button class="btn-new"  onclick="discardAndReset()">保存せずに新しく始める</button>
+  </div>
+</div>
+
+<!-- ─── History Page ─── -->
+<div id="page-history" class="page">
+  <div class="page-title">練習履歴</div>
+  <div class="page-sub" id="historySubtitle">—</div>
+
+  <div class="stat-cards">
+    <div class="stat-card"><div class="val" id="totalSessions">0</div><div class="lbl">累計練習回数</div></div>
+    <div class="stat-card"><div class="val" id="bestThrows">—</div><div class="lbl">最少スロー（ベスト）</div></div>
+    <div class="stat-card"><div class="val" id="avgThrows">—</div><div class="lbl">平均スロー数</div></div>
+    <div class="stat-card"><div class="val" id="latestThrows">—</div><div class="lbl">直近スロー数</div></div>
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-section">
+    <div class="chart-toggle">
+      <button class="active" id="chartByDate" onclick="setChartMode('date')">日付別</button>
+      <button id="chartByCount" onclick="setChartMode('count')">練習回数別</button>
+    </div>
+    <canvas id="mainChart" height="180"></canvas>
+  </div>
+
+  <div class="section-title">セッション一覧</div>
+  <div id="sessionList"></div>
+</div>
+
+<!-- ─── Stats Page ─── -->
+<div id="page-stats" class="page">
+  <div class="page-title">ナンバー別統計</div>
+  <div class="page-sub">全セッションの累計データ</div>
+  <div class="number-stats" id="numberStatsList"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  Constants
+// ══════════════════════════════════════════
+const TARGETS = [20, 19, 18, 17, 16, 15, 'BULL'];
+const MAX_MARKS = 10;
+const MAX_UNDO  = 3;
+const STORAGE_KEY = 'cricket10_v1';
+
+// ══════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════
+let state = {
+  targetIdx: 0,       // index in TARGETS
+  marks: 0,           // current marks for this number
+  throwsPerNum: new Array(7).fill(0),  // throws per target
+  marksPerNum:  new Array(7).fill(0),  // marks accumulated per target
+  totalThrows: 0,
+  history: [],        // undo stack [{targetIdx, marks, throwsPerNum, marksPerNum, totalThrows}]
+  undoUsed: 0,
+  complete: false,
+  sessionStart: null,
+};
+
+let chartMode = 'date';
+let chartInstance = null;
+
+// ══════════════════════════════════════════
+//  Storage
+// ══════════════════════════════════════════
+function loadSessions() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveSessions(sessions) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+}
+
+// ══════════════════════════════════════════
+//  Core: record throw
+// ══════════════════════════════════════════
+function recordThrow(markValue) {
+  if (state.complete) return;
+
+  // push undo snapshot (cap at MAX_UNDO)
+  if (state.history.length >= MAX_UNDO) state.history.shift();
+  state.history.push(JSON.parse(JSON.stringify({
+    targetIdx: state.targetIdx,
+    marks: state.marks,
+    throwsPerNum: [...state.throwsPerNum],
+    marksPerNum:  [...state.marksPerNum],
+    totalThrows: state.totalThrows,
+    undoUsed: state.undoUsed,
+  })));
+
+  state.totalThrows++;
+  state.throwsPerNum[state.targetIdx]++;
+
+  const remaining = MAX_MARKS - state.marks;
+  const applied   = Math.min(markValue, remaining);
+  state.marks += applied;
+  state.marksPerNum[state.targetIdx] += applied;
+
+  if (state.marks >= MAX_MARKS) {
+    // advance
+    if (state.targetIdx < TARGETS.length - 1) {
+      state.targetIdx++;
+      state.marks = 0;
+    } else {
+      // All done
+      state.complete = true;
+      renderPractice();
+      showComplete();
+      return;
+    }
+  }
+
+  renderPractice();
+}
+
+// ══════════════════════════════════════════
+//  Core: undo
+// ══════════════════════════════════════════
+function undoThrow() {
+  if (state.history.length === 0 || state.undoUsed >= MAX_UNDO) return;
+  const snap = state.history.pop();
+  state.undoUsed++;
+  Object.assign(state, snap);
+  state.undoUsed = snap.undoUsed + 1; // re-increment after restore
+  renderPractice();
+}
+
+// ══════════════════════════════════════════
+//  Render: Practice
+// ══════════════════════════════════════════
+function renderPractice() {
+  const target = TARGETS[state.targetIdx];
+  const isBull = target === 'BULL';
+
+  // Target display
+  const td = document.getElementById('targetDisplay');
+  td.textContent = isBull ? 'BULL' : target;
+  td.className = 'target-number' + (isBull ? ' bull' : '');
+
+  // Pips
+  const pipsEl = document.getElementById('markPips');
+  pipsEl.innerHTML = '';
+  for (let i = 0; i < MAX_MARKS; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'pip' + (i < state.marks ? (' filled' + (isBull ? ' bull-pip' : '')) : '');
+    pipsEl.appendChild(pip);
+  }
+
+  // Count
+  document.getElementById('marksCount').innerHTML =
+    `${state.marks} <span>/ 10</span>`;
+
+  // Throw counters
+  document.getElementById('throwsThisNum').textContent = state.throwsPerNum[state.targetIdx];
+  document.getElementById('throwsTotal').textContent   = state.totalThrows;
+
+  // Undo button
+  const undoBtn = document.getElementById('undoBtn');
+  const remain  = MAX_UNDO - state.undoUsed;
+  undoBtn.disabled = (state.history.length === 0 || remain <= 0);
+  document.getElementById('undoRemain').textContent = remain;
+
+  // Progress strip
+  const strip = document.getElementById('progressStrip');
+  strip.innerHTML = '';
+  TARGETS.forEach((t, i) => {
+    const seg = document.createElement('div');
+    let cls = 'prog-seg';
+    if (i < state.targetIdx)       cls += (t === 'BULL' ? ' bull-done' : ' done');
+    else if (i === state.targetIdx) cls += ' current';
+    seg.className = cls;
+    seg.title = t;
+    strip.appendChild(seg);
+  });
+
+  // Complete banner
+  document.getElementById('completeBanner').className =
+    'complete-banner' + (state.complete ? ' show' : '');
+
+  // Hide buttons when complete
+  document.querySelector('.throw-buttons').style.display = state.complete ? 'none' : 'grid';
+  document.getElementById('undoBtn').style.display = state.complete ? 'none' : 'block';
+}
+
+function showComplete() {
+  const msg = document.getElementById('completeMsg');
+  msg.textContent = `合計 ${state.totalThrows} スローで全ナンバーを10マーク達成！`;
+  document.getElementById('completeBanner').className = 'complete-banner show';
+  document.querySelector('.throw-buttons').style.display = 'none';
+  document.getElementById('undoBtn').style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+//  Save / Reset
+// ══════════════════════════════════════════
+function saveSession() {
+  const sessions = loadSessions();
+  const now = new Date();
+
+  // Build per-number stats
+  const numbers = {};
+  TARGETS.forEach((t, i) => {
+    const throws = state.throwsPerNum[i];
+    const marks  = state.marksPerNum[i];
+    const rate   = throws > 0 ? (marks / throws) : 0;
+    numbers[t]   = { throws, marks, rate };
+  });
+
+  sessions.push({
+    id:          Date.now(),
+    date:        now.toISOString(),
+    totalThrows: state.totalThrows,
+    numbers,
+  });
+  saveSessions(sessions);
+
+  showToast('✓ 記録を保存しました');
+  discardAndReset();
+  renderHistory();
+  renderStats();
+}
+
+function discardAndReset() {
+  state = {
+    targetIdx: 0,
+    marks: 0,
+    throwsPerNum: new Array(7).fill(0),
+    marksPerNum:  new Array(7).fill(0),
+    totalThrows: 0,
+    history: [],
+    undoUsed: 0,
+    complete: false,
+    sessionStart: new Date(),
+  };
+  document.querySelector('.throw-buttons').style.display = 'grid';
+  document.getElementById('undoBtn').style.display = 'block';
+  renderPractice();
+}
+
+// ══════════════════════════════════════════
+//  Render: History
+// ══════════════════════════════════════════
+function renderHistory() {
+  const sessions = loadSessions();
+
+  // Subtitle
+  const sub = document.getElementById('historySubtitle');
+  sub.textContent = sessions.length > 0
+    ? `${sessions.length} 回分の記録`
+    : '記録はまだありません';
+
+  // Summary cards
+  document.getElementById('totalSessions').textContent = sessions.length;
+  if (sessions.length === 0) {
+    document.getElementById('bestThrows').textContent = '—';
+    document.getElementById('avgThrows').textContent  = '—';
+    document.getElementById('latestThrows').textContent = '—';
+  } else {
+    const throws = sessions.map(s => s.totalThrows);
+    document.getElementById('bestThrows').textContent   = Math.min(...throws);
+    document.getElementById('avgThrows').textContent    = Math.round(throws.reduce((a,b)=>a+b,0)/throws.length);
+    document.getElementById('latestThrows').textContent = throws[throws.length-1];
+  }
+
+  // Chart
+  renderChart(sessions);
+
+  // Session list (newest first)
+  const list = document.getElementById('sessionList');
+  if (sessions.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="em-icon">🎯</div><p>練習を記録すると<br>ここに表示されます</p></div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  [...sessions].reverse().forEach((s, ri) => {
+    const idx = sessions.length - ri;
+    const d   = new Date(s.date);
+    const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+    // Detail grid
+    let detailHTML = '<div class="detail-grid">';
+    TARGETS.forEach(t => {
+      const n = s.numbers[t];
+      if (!n) return;
+      const rateStr = (n.rate * 100).toFixed(1) + '%';
+      detailHTML += `
+        <div class="detail-cell">
+          <div class="d-num">${t}</div>
+          <div class="d-throws">${n.throws}</div>
+          <div class="d-rate">${rateStr}</div>
+        </div>`;
+    });
+    detailHTML += '</div>';
+
+    const card = document.createElement('div');
+    card.className = 'session-card';
+    card.innerHTML = `
+      <div class="session-card-header" onclick="toggleDetail(this)">
+        <div>
+          <div class="session-no">#${idx}</div>
+          <div class="session-date">${dateStr}</div>
+        </div>
+        <div class="session-throws">${s.totalThrows}<span style="font-size:12px;color:var(--text-sub);font-weight:400"> スロー</span></div>
+      </div>
+      <div class="session-detail">${detailHTML}</div>`;
+    list.appendChild(card);
+  });
+}
+
+function toggleDetail(header) {
+  const detail = header.nextElementSibling;
+  detail.classList.toggle('open');
+}
+
+// ══════════════════════════════════════════
+//  Chart
+// ══════════════════════════════════════════
+function setChartMode(mode) {
+  chartMode = mode;
+  document.getElementById('chartByDate').classList.toggle('active', mode === 'date');
+  document.getElementById('chartByCount').classList.toggle('active', mode === 'count');
+  renderChart(loadSessions());
+}
+
+function renderChart(sessions) {
+  const canvas = document.getElementById('mainChart');
+  const ctx    = canvas.getContext('2d');
+
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+  if (sessions.length === 0) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  let labels = [], data = [];
+
+  if (chartMode === 'date') {
+    // Group by date, compute average
+    const map = {};
+    sessions.forEach(s => {
+      const d = new Date(s.date);
+      const key = `${d.getMonth()+1}/${d.getDate()}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(s.totalThrows);
+    });
+    labels = Object.keys(map);
+    data   = labels.map(k => Math.round(map[k].reduce((a,b)=>a+b,0)/map[k].length));
+  } else {
+    sessions.forEach((s, i) => {
+      labels.push(`#${i+1}`);
+      data.push(s.totalThrows);
+    });
+  }
+
+  // Simple canvas chart (no external lib)
+  drawChart(canvas, ctx, labels, data);
+}
+
+function drawChart(canvas, ctx, labels, data) {
+  const dpr = window.devicePixelRatio || 1;
+  const W   = canvas.parentElement.clientWidth - 32;
+  const H   = 180;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+
+  const PAD_L = 44, PAD_R = 12, PAD_T = 12, PAD_B = 36;
+  const w = W - PAD_L - PAD_R;
+  const h = H - PAD_T - PAD_B;
+
+  const maxVal = Math.max(...data);
+  const minVal = Math.min(...data);
+  const range  = maxVal - minVal || 1;
+
+  // Grid
+  const gridLines = 4;
+  ctx.strokeStyle = '#2e2e3e';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = PAD_T + (h / gridLines) * i;
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, y);
+    ctx.lineTo(PAD_L + w, y);
+    ctx.stroke();
+
+    const val = Math.round(maxVal - (range / gridLines) * i);
+    ctx.fillStyle = '#8888aa';
+    ctx.font = '10px -apple-system';
+    ctx.textAlign = 'right';
+    ctx.fillText(val, PAD_L - 6, y + 4);
+  }
+
+  if (data.length === 0) return;
+
+  // Line + area
+  const xStep = data.length > 1 ? w / (data.length - 1) : w / 2;
+  const pts = data.map((v, i) => ({
+    x: PAD_L + (data.length > 1 ? i * xStep : w / 2),
+    y: PAD_T + h - ((v - minVal) / range) * h,
+  }));
+
+  // Area fill
+  const grad = ctx.createLinearGradient(0, PAD_T, 0, PAD_T + h);
+  grad.addColorStop(0, 'rgba(232,255,71,0.25)');
+  grad.addColorStop(1, 'rgba(232,255,71,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, PAD_T + h);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length-1].x, PAD_T + h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Line
+  ctx.strokeStyle = '#e8ff47';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.stroke();
+
+  // Dots
+  pts.forEach(p => {
+    ctx.fillStyle = '#e8ff47';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#0f0f14';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // X labels (show max 6)
+  ctx.fillStyle = '#8888aa';
+  ctx.font = '9px -apple-system';
+  ctx.textAlign = 'center';
+  const step = Math.ceil(labels.length / 6);
+  labels.forEach((l, i) => {
+    if (i % step !== 0 && i !== labels.length - 1) return;
+    ctx.fillText(l, pts[i].x, H - 8);
+  });
+}
+
+// ══════════════════════════════════════════
+//  Render: Stats
+// ══════════════════════════════════════════
+function renderStats() {
+  const sessions = loadSessions();
+  const list = document.getElementById('numberStatsList');
+
+  if (sessions.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="em-icon">📊</div><p>練習を記録すると<br>ナンバー別の統計が表示されます</p></div>';
+    return;
+  }
+
+  // Aggregate
+  const agg = {};
+  TARGETS.forEach(t => agg[t] = { throws: 0, marks: 0 });
+  sessions.forEach(s => {
+    TARGETS.forEach(t => {
+      if (s.numbers[t]) {
+        agg[t].throws += s.numbers[t].throws;
+        agg[t].marks  += s.numbers[t].marks;
+      }
+    });
+  });
+
+  const maxThrows = Math.max(...TARGETS.map(t => agg[t].throws)) || 1;
+
+  list.innerHTML = '';
+  TARGETS.forEach(t => {
+    const { throws, marks } = agg[t];
+    const rate     = throws > 0 ? (marks / throws) * 100 : 0;
+    const avgThrow = throws > 0 ? (throws / sessions.length).toFixed(1) : '—';
+    const isBull   = t === 'BULL';
+
+    const row = document.createElement('div');
+    row.className = 'num-row';
+    row.innerHTML = `
+      <div class="nr-num${isBull?' bull-num':''}">${t}</div>
+      <div>
+        <div class="bar-wrap">
+          <div class="bar-fill${isBull?' bull-bar':''}" style="width:${(throws/maxThrows)*100}%"></div>
+        </div>
+        <div style="font-size:10px;color:var(--text-sub);margin-top:3px">avg ${avgThrow} スロー/回</div>
+      </div>
+      <div class="nr-throws">${throws}<span style="font-size:10px;color:var(--text-sub)">投</span></div>
+      <div class="nr-rate">${rate.toFixed(1)}%<br><span style="font-size:10px">成功率</span></div>`;
+    list.appendChild(row);
+  });
+}
+
+// ══════════════════════════════════════════
+//  Navigation
+// ══════════════════════════════════════════
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('nav button')[['practice','history','stats'].indexOf(name)].classList.add('active');
+
+  if (name === 'history') renderHistory();
+  if (name === 'stats')   renderStats();
+}
+
+// ══════════════════════════════════════════
+//  Toast
+// ══════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ══════════════════════════════════════════
+//  Init
+// ══════════════════════════════════════════
+discardAndReset();
+</script>
+</body>
+</html>
