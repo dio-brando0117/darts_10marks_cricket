@@ -422,6 +422,24 @@
     .empty-state p { font-size: 14px; }
 
     /* ─── Toast ─── */
+    /* ─── Delete session button ─── */
+    .btn-del-session {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--accent2);
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.12s;
+      flex-shrink: 0;
+    }
+    .btn-del-session:active {
+      transform: scale(0.92);
+      background: var(--accent2);
+      color: #000;
+    }
     .toast {
       position: fixed;
       bottom: 90px;
@@ -504,10 +522,12 @@
   <div class="page-sub" id="historySubtitle">—</div>
 
   <div class="stat-cards">
-    <div class="stat-card"><div class="val" id="totalSessions">0</div><div class="lbl">累計練習回数</div></div>
-    <div class="stat-card"><div class="val" id="bestThrows">—</div><div class="lbl">最少スロー（ベスト）</div></div>
-    <div class="stat-card"><div class="val" id="avgThrows">—</div><div class="lbl">平均スロー数</div></div>
-    <div class="stat-card"><div class="val" id="latestThrows">—</div><div class="lbl">直近スロー数</div></div>
+      <div class="stat-card"><div class="val" id="totalSessions">0</div><div class="lbl">累計練習回数</div></div>
+      <div class="stat-card"><div class="val" id="bestThrows">—</div><div class="lbl">最少スロー（ベスト）</div></div>
+      <div class="stat-card"><div class="val" id="avgThrows">—</div><div class="lbl">平均スロー数</div></div>
+      <div class="stat-card"><div class="val" id="latestThrows">—</div><div class="lbl">直近スロー数</div></div>
+      <!-- ▼ 追加 ▼ -->
+      <div class="stat-card" style="grid-column:1 / -1"><div class="val" id="recent10Avg">—</div><div class="lbl">直近10回の平均</div></div>      <!-- ▲ 追加 ▲ -->
   </div>
 
   <!-- Chart -->
@@ -535,6 +555,11 @@
         <button class="btn btn-1m" onclick="exportData()">⬇ データをエクスポート（JSON保存）</button>
         <button class="btn btn-2m" onclick="document.getElementById('importFile').click()">⬆ データをインポート（JSON読込）</button>
         <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(event)">
+
+        <!-- ▼ 全件削除（追加） ▼ -->
+        <button class="btn btn-out" style="color:var(--accent2);border-color:var(--accent2)" onclick="deleteAllSessions()">🗑 全履歴を削除</button>
+        <!-- ▲ 全件削除（追加） ▲ -->
+
         <div style="font-size:11px;color:var(--text-sub);line-height:1.6;margin-top:4px">
             ※エクスポートしたJSONは機種変更やバックアップ用に保存しておけます。<br>
             ※インポートは「追加」か「全置換」を選べます。
@@ -772,8 +797,17 @@ function renderHistory() {
     document.getElementById('bestThrows').textContent   = Math.min(...throws);
     document.getElementById('avgThrows').textContent    = Math.round(throws.reduce((a,b)=>a+b,0)/throws.length);
     document.getElementById('latestThrows').textContent = throws[throws.length-1];
-  }
 
+    // ▼ 直近10回の平均（追加） ▼
+    const recent = throws.slice(-10);
+    const recentAvg = Math.round(recent.reduce((a,b)=>a+b,0) / recent.length);
+    const recent10El = document.getElementById('recent10Avg');
+    recent10El.textContent = recentAvg;
+    // 10回に満たない場合は「直近N回の平均」とラベルを動的に変更
+    recent10El.nextElementSibling.textContent =
+      sessions.length < 10 ? `直近${recent.length}回の平均` : '直近10回の平均';
+    // ▲ 直近10回の平均（追加） ▲
+  }
   // Chart
   renderChart(sessions);
 
@@ -807,13 +841,16 @@ function renderHistory() {
 
     const card = document.createElement('div');
     card.className = 'session-card';
-    card.innerHTML = `
+      card.innerHTML = `
       <div class="session-card-header" onclick="toggleDetail(this)">
         <div>
           <div class="session-no">#${idx}</div>
           <div class="session-date">${dateStr}</div>
         </div>
-        <div class="session-throws">${s.totalThrows}<span style="font-size:12px;color:var(--text-sub);font-weight:400"> スロー</span></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="session-throws">${s.totalThrows}<span style="font-size:12px;color:var(--text-sub);font-weight:400"> スロー</span></div>
+          <button class="btn-del-session" onclick="event.stopPropagation();deleteSession(${s.id})">🗑</button>
+        </div>
       </div>
       <div class="session-detail">${detailHTML}</div>`;
     list.appendChild(card);
@@ -1129,6 +1166,59 @@ function isValidSession(s) {
     && typeof s.date === 'string'
     && typeof s.totalThrows === 'number'
     && s.numbers && typeof s.numbers === 'object';
+}
+// ══════════════════════════════════════════
+//  Delete
+// ══════════════════════════════════════════
+function deleteSession(id) {
+  const sessions = loadSessions();
+  const target = sessions.find(s => s.id === id);
+  if (!target) return;
+
+  const d = new Date(target.date);
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+  const ok = window.confirm(
+    `この記録を削除しますか？\n\n` +
+    `${dateStr}\n` +
+    `${target.totalThrows} スロー\n\n` +
+    `この操作は元に戻せません。`
+  );
+  if (!ok) return;
+
+  const updated = sessions.filter(s => s.id !== id);
+  saveSessions(updated);
+  showToast('✓ 記録を削除しました');
+  renderHistory();
+  renderStats();
+}
+
+function deleteAllSessions() {
+  const sessions = loadSessions();
+  if (sessions.length === 0) {
+    showToast('削除する記録がありません');
+    return;
+  }
+
+  // 一段階目
+  const ok1 = window.confirm(
+    `⚠ 全${sessions.length}件の履歴をすべて削除しますか？\n\n` +
+    `この操作は元に戻せません。`
+  );
+  if (!ok1) return;
+
+  // 二段階目（誤操作防止）
+  const ok2 = window.confirm(
+    `本当に削除してよろしいですか？\n\n` +
+    `念のため、先にエクスポートでバックアップを\n` +
+    `取っておくことをおすすめします。`
+  );
+  if (!ok2) { showToast('削除を中止しました'); return; }
+
+  saveSessions([]);
+  showToast('✓ 全履歴を削除しました');
+  renderHistory();
+  renderStats();
 }
 // ══════════════════════════════════════════
 //  Toast
