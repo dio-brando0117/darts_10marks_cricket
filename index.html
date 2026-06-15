@@ -525,9 +525,22 @@
 
 <!-- ─── Stats Page ─── -->
 <div id="page-stats" class="page">
-  <div class="page-title">ナンバー別統計</div>
-  <div class="page-sub">全セッションの累計データ</div>
-  <div class="number-stats" id="numberStatsList"></div>
+    <div class="page-title">ナンバー別統計</div>
+    <div class="page-sub">全セッションの累計データ</div>
+    <div class="number-stats" id="numberStatsList"></div>
+
+    <!-- ▼▼▼ データ管理（追加） ▼▼▼ -->
+    <div class="section-title" style="margin-top:32px">データ管理</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-1m" onclick="exportData()">⬇ データをエクスポート（JSON保存）</button>
+        <button class="btn btn-2m" onclick="document.getElementById('importFile').click()">⬆ データをインポート（JSON読込）</button>
+        <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(event)">
+        <div style="font-size:11px;color:var(--text-sub);line-height:1.6;margin-top:4px">
+            ※エクスポートしたJSONは機種変更やバックアップ用に保存しておけます。<br>
+            ※インポートは「追加」か「全置換」を選べます。
+        </div>
+    </div>
+    <!-- ▲▲▲ データ管理（追加） ▲▲▲ -->
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1006,7 +1019,117 @@ function switchPage(name) {
   if (name === 'history') renderHistory();
   if (name === 'stats')   renderStats();
 }
+// ══════════════════════════════════════════
+//  Export / Import
+// ══════════════════════════════════════════
+function exportData() {
+  const sessions = loadSessions();
+  if (sessions.length === 0) {
+    showToast('エクスポートする記録がありません');
+    return;
+  }
 
+  const payload = {
+    app: 'cricket10',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storageKey: STORAGE_KEY,
+    sessions: sessions,
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+
+  const d  = new Date();
+  const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cricket10_backup_${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(`✓ ${sessions.length}件をエクスポートしました`);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let imported;
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // 形式1: エクスポートした {app, sessions:[...]} 形式
+      // 形式2: セッション配列がそのまま入っている形式
+      imported = Array.isArray(parsed) ? parsed : parsed.sessions;
+    } catch (err) {
+      showToast('⚠ JSONの読み込みに失敗しました');
+      event.target.value = '';
+      return;
+    }
+
+    // バリデーション
+    if (!Array.isArray(imported) || !imported.every(isValidSession)) {
+      showToast('⚠ データ形式が正しくありません');
+      event.target.value = '';
+      return;
+    }
+
+    const current = loadSessions();
+    const choice = window.confirm(
+      `${imported.length}件の記録を読み込みます。\n\n` +
+      `「OK」＝今ある${current.length}件に追加（マージ）\n` +
+      `「キャンセル」＝この後、全置換するか確認します`
+    );
+
+    if (choice) {
+      // マージ：id重複を除外して追加
+      const existingIds = new Set(current.map(s => s.id));
+      const toAdd = imported.filter(s => !existingIds.has(s.id));
+      const merged = current.concat(toAdd);
+      merged.sort((a, b) => new Date(a.date) - new Date(b.date));
+      saveSessions(merged);
+      showToast(`✓ ${toAdd.length}件を追加しました`);
+    } else {
+      const replace = window.confirm(
+        `⚠ 全置換しますか？\n\n` +
+        `今ある${current.length}件の記録はすべて消え、\n` +
+        `読み込んだ${imported.length}件に置き換わります。\n\n` +
+        `この操作は元に戻せません。`
+      );
+      if (replace) {
+        const sorted = [...imported].sort((a, b) => new Date(a.date) - new Date(b.date));
+        saveSessions(sorted);
+        showToast(`✓ ${imported.length}件で全置換しました`);
+      } else {
+        showToast('インポートを中止しました');
+        event.target.value = '';
+        return;
+      }
+    }
+
+    // 画面を再描画
+    renderHistory();
+    renderStats();
+    event.target.value = ''; // 同じファイルを再選択できるようリセット
+  };
+  reader.readAsText(file);
+}
+
+// セッション1件が想定の構造かを簡易チェック
+function isValidSession(s) {
+  return s
+    && typeof s === 'object'
+    && (typeof s.id === 'number' || typeof s.id === 'string')
+    && typeof s.date === 'string'
+    && typeof s.totalThrows === 'number'
+    && s.numbers && typeof s.numbers === 'object';
+}
 // ══════════════════════════════════════════
 //  Toast
 // ══════════════════════════════════════════
