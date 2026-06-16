@@ -505,7 +505,8 @@
     <button class="btn btn-2m"   onclick="recordThrow(2)">2MARK<span class="btn-mark-label">ダブル / インブル</span></button>
     <button class="btn btn-3m"   onclick="recordThrow(3)">3MARK<span class="btn-mark-label">トリプル</span></button>
   </div>
-  <button class="btn-undo" id="undoBtn" onclick="undoThrow()">↩ 取り消し（残り<span id="undoRemain">3</span>回）</button>
+  <!-- <button class="btn-undo" id="undoBtn" onclick="undoThrow()">↩ 取り消し（残り<span id="undoRemain">3</span>回）</button> -->
+  <button class="btn-undo" id="undoBtn" onclick="undoThrow()">↩ 1つ前に戻す</button>
 
   <!-- Complete banner -->
   <div class="complete-banner" id="completeBanner">
@@ -555,6 +556,12 @@
         <button class="btn btn-1m" onclick="exportData()">⬇ データをエクスポート（JSON保存）</button>
         <button class="btn btn-2m" onclick="document.getElementById('importFile').click()">⬆ データをインポート（JSON読込）</button>
         <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(event)">
+
+        <!-- ▼ CSV（追加） ▼ -->
+        <button class="btn btn-1m" onclick="exportCSV()">⬇ CSVでエクスポート</button>
+        <button class="btn btn-2m" onclick="document.getElementById('importCSVFile').click()">⬆ CSVでインポート</button>
+        <input type="file" id="importCSVFile" accept="text/csv,.csv" style="display:none" onchange="importCSV(event)">
+        <!-- ▲ CSV（追加） ▲ -->
 
         <!-- ▼ 全件削除（追加） ▼ -->
         <button class="btn btn-out" style="color:var(--accent2);border-color:var(--accent2)" onclick="deleteAllSessions()">🗑 全履歴を削除</button>
@@ -615,14 +622,14 @@ function recordThrow(markValue) {
   if (state.complete) return;
 
   // push undo snapshot (cap at MAX_UNDO)
-  if (state.history.length >= MAX_UNDO) state.history.shift();
+  //if (state.history.length >= MAX_UNDO) state.history.shift();
   state.history.push(JSON.parse(JSON.stringify({
     targetIdx: state.targetIdx,
     marks: state.marks,
     throwsPerNum: [...state.throwsPerNum],
     marksPerNum:  [...state.marksPerNum],
     totalThrows: state.totalThrows,
-    undoUsed: state.undoUsed,
+    //undoUsed: state.undoUsed,
   })));
 
   state.totalThrows++;
@@ -653,15 +660,25 @@ function recordThrow(markValue) {
 // ══════════════════════════════════════════
 //  Core: undo
 // ══════════════════════════════════════════
+// function undoThrow() {
+//   if (state.history.length === 0 || state.undoUsed >= MAX_UNDO) return;
+//   const snap = state.history.pop();
+//   state.undoUsed++;
+//   Object.assign(state, snap);
+//   state.undoUsed = snap.undoUsed + 1; // re-increment after restore
+//   renderPractice();
+// }
 function undoThrow() {
-  if (state.history.length === 0 || state.undoUsed >= MAX_UNDO) return;
+  if (state.history.length === 0) return;
   const snap = state.history.pop();
-  state.undoUsed++;
   Object.assign(state, snap);
-  state.undoUsed = snap.undoUsed + 1; // re-increment after restore
+  // 完了状態から戻った場合はバナーを消す
+  state.complete = false;
+  document.querySelector('.throw-buttons').style.display = 'grid';
+  document.getElementById('undoBtn').style.display = 'block';
+  document.getElementById('completeBanner').className = 'complete-banner';
   renderPractice();
 }
-
 // ══════════════════════════════════════════
 //  Render: Practice
 // ══════════════════════════════════════════
@@ -693,9 +710,10 @@ function renderPractice() {
 
   // Undo button
   const undoBtn = document.getElementById('undoBtn');
-  const remain  = MAX_UNDO - state.undoUsed;
-  undoBtn.disabled = (state.history.length === 0 || remain <= 0);
-  document.getElementById('undoRemain').textContent = remain;
+  // const remain  = MAX_UNDO - state.undoUsed;
+  undoBtn.disabled = (state.history.length === 0);
+  // undoBtn.disabled = (state.history.length === 0 || remain <= 0);
+  // document.getElementById('undoRemain').textContent = remain;
 
   // Progress strip
   const strip = document.getElementById('progressStrip');
@@ -1167,6 +1185,186 @@ function isValidSession(s) {
     && typeof s.totalThrows === 'number'
     && s.numbers && typeof s.numbers === 'object';
 }
+// ══════════════════════════════════════════
+//  CSV Export / Import
+// ══════════════════════════════════════════
+const CSV_HEADER = ['id', 'date', 'totalThrows', 'number', 'throws', 'marks'];
+
+// CSVの1フィールドを安全に整形（カンマ・引用符・改行を考慮）
+function csvCell(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportCSV() {
+  const sessions = loadSessions();
+  if (sessions.length === 0) {
+    showToast('エクスポートする記録がありません');
+    return;
+  }
+
+  const rows = [CSV_HEADER.join(',')];
+  sessions.forEach(s => {
+    TARGETS.forEach(t => {
+      const n = s.numbers[t] || { throws: 0, marks: 0 };
+      rows.push([
+        csvCell(s.id),
+        csvCell(s.date),
+        csvCell(s.totalThrows),
+        csvCell(t),
+        csvCell(n.throws),
+        csvCell(n.marks),
+      ].join(','));
+    });
+  });
+
+  // Excelの文字化け対策にBOMを付与
+  const csv  = '\uFEFF' + rows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+
+  const d  = new Date();
+  const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `cricket10_backup_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(`✓ ${sessions.length}件をCSVエクスポートしました`);
+}
+
+// 簡易CSVパーサ（引用符・エスケープ対応）
+function parseCSV(text) {
+  // BOM除去
+  text = text.replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [], cell = '', inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cell += '"'; i++; }
+        else inQuotes = false;
+      } else cell += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\r') { /* skip */ }
+      else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+  }
+  // 最終行
+  if (cell !== '' || row.length > 0) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let sessions;
+    try {
+      sessions = csvToSessions(e.target.result);
+    } catch (err) {
+      showToast('⚠ CSVの読み込みに失敗しました');
+      event.target.value = '';
+      return;
+    }
+
+    if (!sessions || sessions.length === 0 || !sessions.every(isValidSession)) {
+      showToast('⚠ CSVの形式が正しくありません');
+      event.target.value = '';
+      return;
+    }
+
+    // 以降はJSONインポートと同じマージ／全置換フロー
+    const current = loadSessions();
+    const choice = window.confirm(
+      `${sessions.length}件の記録を読み込みます。\n\n` +
+      `「OK」＝今ある${current.length}件に追加（マージ）\n` +
+      `「キャンセル」＝この後、全置換するか確認します`
+    );
+
+    if (choice) {
+      const existingIds = new Set(current.map(s => s.id));
+      const toAdd = sessions.filter(s => !existingIds.has(s.id));
+      const merged = current.concat(toAdd);
+      merged.sort((a, b) => new Date(a.date) - new Date(b.date));
+      saveSessions(merged);
+      showToast(`✓ ${toAdd.length}件を追加しました`);
+    } else {
+      const replace = window.confirm(
+        `⚠ 全置換しますか？\n\n` +
+        `今ある${current.length}件の記録はすべて消え、\n` +
+        `読み込んだ${sessions.length}件に置き換わります。\n\n` +
+        `この操作は元に戻せません。`
+      );
+      if (replace) {
+        const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+        saveSessions(sorted);
+        showToast(`✓ ${sessions.length}件で全置換しました`);
+      } else {
+        showToast('インポートを中止しました');
+        event.target.value = '';
+        return;
+      }
+    }
+
+    renderHistory();
+    renderStats();
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// CSVテキスト → セッション配列（idでグループ化して入れ子を復元）
+function csvToSessions(text) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) return [];
+
+  const header = rows[0].map(h => h.trim());
+  const idx = {};
+  CSV_HEADER.forEach(col => { idx[col] = header.indexOf(col); });
+
+  // 必須列チェック
+  if (Object.values(idx).some(v => v === -1)) {
+    throw new Error('header mismatch');
+  }
+
+  const map = {}; // id → session
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.length === 1 && r[0] === '') continue; // 空行スキップ
+
+    const rawId = r[idx.id];
+    // idは元が数値ならNumber、そうでなければ文字列のまま
+    const id = /^\d+$/.test(rawId) ? Number(rawId) : rawId;
+    const date = r[idx.date];
+    const totalThrows = Number(r[idx.totalThrows]);
+    const number = r[idx.number];   // '20'〜'15' or 'BULL'
+    const throws = Number(r[idx.throws]);
+    const marks  = Number(r[idx.marks]);
+
+    if (!map[id]) {
+      map[id] = { id, date, totalThrows, numbers: {} };
+    }
+    const rate = throws > 0 ? (marks / throws) : 0;
+    // numberキーは元のJSONに合わせ、数値ターゲットは数値・BULLは文字列
+    const key = (number === 'BULL') ? 'BULL' : Number(number);
+    map[id].numbers[key] = { throws, marks, rate };
+  }
+
+  return Object.values(map);
+}
+
 // ══════════════════════════════════════════
 //  Delete
 // ══════════════════════════════════════════
